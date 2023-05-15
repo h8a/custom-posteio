@@ -1,0 +1,75 @@
+version: "2"
+
+services:
+
+  nginx-proxy:
+    image: nginxproxy/nginx-proxy
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - conf:/etc/nginx/conf.d
+      - vhost:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+      - dhparam:/etc/nginx/dhparam
+      - certs:/etc/nginx/certs:ro
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    network_mode: bridge 
+    depends_on:
+      - mail
+
+  acme-companion:
+    image: nginxproxy/acme-companion
+    container_name: nginx-proxy-acme
+    volumes_from:
+      - nginx-proxy
+    volumes:
+      - certs:/etc/nginx/certs:rw
+      - acme:/etc/acme.sh
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    network_mode: bridge
+    depends_on:
+      - nginx-proxy
+  
+  mail-proxied-app:
+    image: nginx
+    restart: always
+    environment:
+      - "VIRTUAL_HOST=<DOMAIN_EMAIL>"
+      - "LETSENCRYPT_HOST=<DOMAIN_EMAIL>"
+    depends_on:
+      - acme-companion
+  
+  mail:
+    container_name: poste
+    image: analogic/poste.io
+    ports:
+      - "25:25"
+      - "110:110"
+      - "143:143"
+      - "465:465"
+      - "587:587"
+      - "993:993"
+      - "995:995"
+    volumes:
+      - ./poste:/data
+    restart: always
+    environment:
+      - "TZ=America/Mazatlan"
+      - "VIRTUAL_HOST=<DOMAIN_EMAIL>"
+      - "VIRTUAL_PORT=80"
+      - "DISABLE_CLAMAV=TRUE"
+      - "DISABLE_RSPAMD=TRUE"
+      - "HTTPS=OFF"
+      - "LETSENCRYPT_HOST=<DOMAIN_EMAIL>"
+      - "LETSENCRYPT_EMAIL=<REGISTER_CERTIFICATE_EMAIL>"
+    network_mode: bridge
+
+volumes:
+  conf:
+  vhost:
+  html:
+  certs:
+  acme:
+  dhparam:
